@@ -22,6 +22,8 @@ const typeDefs = gql`
   # Just like in RESTAPI, dont use GET request to modefiy data, in GraphQL, any operations that cause writes should be sent explicitly via a mutation
   type Mutation {
     createUser(name: String!, email: String!, role: Role!): User
+    createCourse(name: String!, faculty_id: ID!): Course
+    deleteCourse(courseID: ID!): Course
   }
   # User type which includes the role as one of it's fields
   # Interfaces are useful when you want to return an object or set of objects, but those might be of several different types.
@@ -36,7 +38,7 @@ const typeDefs = gql`
     name: String!
     email: String!
     role: Role!
-    #    courses: [Course]
+    courses: [Course]
     gpa: Float!
   }
 
@@ -45,7 +47,7 @@ const typeDefs = gql`
     name: String!
     email: String!
     role: Role!
-    #    courses: [Course]
+    courses: [Course]
   }
 
   type Admin implements User {
@@ -78,6 +80,13 @@ const typeDefs = gql`
   }
 `;
 
+// create a course database
+const Course = [
+  { id: 0, faculty_id: 2, name: "Course1" },
+  { id: 1, faculty_id: 2, name: "Course2" },
+  { id: 2, faculty_id: 2, name: "Course3" }
+];
+
 // this.users is similar to self.users in python class variable
 class Users {
   // declare class variables
@@ -93,6 +102,10 @@ class Users {
   getUsers() {
     return this.users;
   }
+
+  getCourse() {
+    return this.Course;
+  }
 }
 
 // To create a new users object
@@ -103,10 +116,6 @@ const resolvers = {
   Query: {
     hello: (root, args, context) => `Hello ${args.name}!`,
     users: (root, args, context) => users.getUsers(),
-    // student: (root, args, context) => {
-    //   const id = parseInt(args.id, 10);
-    //   return users.getUsers().find((u) => u.id === id);
-    // }
     student: (root, args, context) => {
       const email = args.email;
       // If the string begins with any other value, the radix is 10 (decimal)
@@ -163,11 +172,31 @@ const resolvers = {
     }
   },
   Mutation: {
-    createUser: (_, { user }, context) => users.create(user)
+    createUser: (_, { user }, context) => users.create(user),
+    // Course needs course name, id, and use facultyID to link to faculty database
+    createCourse: (_, { name, faculty_id }, context) => {
+      const newCourse = {
+        id: Course.length + 1,
+        faculty_id: parseInt(faculty_id, 10),
+        name: name
+      };
+      Course.push(newCourse);
+      return newCourse;
+    },
+    // Filter the course database by course ID, and delete that
+    deleteCourse: (_, { courseID }, context) => {
+      
   },
   // the resolver needs help in determining how to distinguish between the three concrete types at runtime.
   User: {
     __resolveType: (user, context, info) => user.role
+  },
+
+  // if It's courses if called under Faculty, retrieve the courses through id and place it to the courses variable of Faculty
+  Faculty: {
+    courses: (course) => {
+      return Course.filter((c) => c.faculty_id === course.id);
+    }
   }
 };
 
