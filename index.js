@@ -81,7 +81,7 @@ const typeDefs = gql`
 `;
 
 // create a course database
-const Course = [
+let Course = [
   { id: 0, faculty_id: 2, name: "Course1" },
   { id: 1, faculty_id: 2, name: "Course2" },
   { id: 2, faculty_id: 2, name: "Course3" }
@@ -183,9 +183,18 @@ const resolvers = {
       Course.push(newCourse);
       return newCourse;
     },
-    // Filter the course database by course ID, and delete that
+    // Filter the course database by course ID, and delete that the ID is list item
     deleteCourse: (_, { courseID }, context) => {
-      
+      // find where Course ID match the desired id
+      const found = Course.find((c) => c.id === parseInt(courseID, 10));
+      // adding a conditon to check before seeting reduced_Course to Course
+      if (found) {
+        Course = Course.filter((c) => c.id !== parseInt(courseID, 10));
+        return found;
+      } else {
+        throw new Error("Course ID: " + courseID + " is Not Found");
+      }
+    }
   },
   // the resolver needs help in determining how to distinguish between the three concrete types at runtime.
   User: {
