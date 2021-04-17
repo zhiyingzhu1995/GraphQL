@@ -8,6 +8,8 @@ const typeDefs = gql`
     users: [User]
     student(email: String!, id: ID): Student
     faculty(email: String!, id: ID): Faculty
+    #  to retrieve a list of courses
+    courses: [Course]
   }
 
   # Role = an enumeration of valid user roles
@@ -24,6 +26,8 @@ const typeDefs = gql`
     createUser(name: String!, email: String!, role: Role!): User
     createCourse(name: String!, faculty_id: ID!): Course
     deleteCourse(courseID: ID!): Course
+    addCourseStudent(name: String!, studentID: ID!): Course
+    deleteCourseStudent(name: String!, studentID: ID!): Course
   }
   # User type which includes the role as one of it's fields
   # Interfaces are useful when you want to return an object or set of objects, but those might be of several different types.
@@ -59,7 +63,7 @@ const typeDefs = gql`
 
   type Course {
     id: ID!
-    name: String!
+    name: String
     professor: Faculty
     students: [Student]
     assignments: [Assignment]
@@ -80,11 +84,19 @@ const typeDefs = gql`
   }
 `;
 
-// create a course database
-let Course = [
+// create a course_professoer database
+let Course_Professor = [
   { id: 0, faculty_id: 2, name: "Course1" },
   { id: 1, faculty_id: 2, name: "Course2" },
   { id: 2, faculty_id: 2, name: "Course3" }
+];
+
+// create a course_professoer database, you can use the course_id to join the id from course_professor database,
+// assuming each professor teaches 1 course
+let Course_Student = [
+  { id: 0, student_id: 1, name: "Course1" },
+  { id: 1, student_id: 1, name: "Course2" },
+  { id: 2, student_id: 1, name: "Course3" }
 ];
 
 // this.users is similar to self.users in python class variable
@@ -103,9 +115,9 @@ class Users {
     return this.users;
   }
 
-  getCourse() {
-    return this.Course;
-  }
+  //   getCourse() {
+  //     return this.Course;
+  //   }
 }
 
 // To create a new users object
@@ -116,6 +128,7 @@ const resolvers = {
   Query: {
     hello: (root, args, context) => `Hello ${args.name}!`,
     users: (root, args, context) => users.getUsers(),
+    courses: (root, args, context) => Course_Professor,
     student: (root, args, context) => {
       const email = args.email;
       // If the string begins with any other value, the radix is 10 (decimal)
@@ -176,23 +189,72 @@ const resolvers = {
     // Course needs course name, id, and use facultyID to link to faculty database
     createCourse: (_, { name, faculty_id }, context) => {
       const newCourse = {
-        id: Course.length + 1,
+        id: Course_Professor.length + 1,
         faculty_id: parseInt(faculty_id, 10),
         name: name
       };
-      Course.push(newCourse);
+      Course_Professor.push(newCourse);
       return newCourse;
     },
     // Filter the course database by course ID, and delete that the ID is list item
     deleteCourse: (_, { courseID }, context) => {
-      // find where Course ID match the desired id
-      const found = Course.find((c) => c.id === parseInt(courseID, 10));
+      // find where Course ID match the desired id in the professor database
+      const found = Course_Professor.find(
+        (c) => c.id === parseInt(courseID, 10)
+      );
       // adding a conditon to check before seeting reduced_Course to Course
       if (found) {
-        Course = Course.filter((c) => c.id !== parseInt(courseID, 10));
+        // ++++++++++ Delete the Course from Professor database
+        Course_Professor = Course_Professor.filter(
+          (c) => c.id !== parseInt(courseID, 10)
+        );
+
         return found;
       } else {
         throw new Error("Course ID: " + courseID + " is Not Found");
+      }
+    },
+    // Add a student to a course. Do nothing if the student is already enrolled
+    addCourseStudent: (_, { name, studentID }, context) => {
+      const newStudentToCourse = {
+        id: Course_Student.length + 1,
+        student_id: parseInt(studentID, 10),
+        name: name
+      };
+      // add a condition to check if the student is already enrolled
+      let Found = Course_Student.find(
+        (s) => s.student_id === parseInt(studentID, 10) && s.name === name
+      );
+
+      // if Not Found then add the student to the list, else, alert that the student has been added
+      if (!Found) {
+        Course_Student.push(newStudentToCourse);
+        return newStudentToCourse;
+      } else {
+        throw new Error("Student ID " + studentID + " had already been added");
+      }
+    },
+    // Remove a student from a course
+    // not working somehow, will detele all course for the student
+    deleteCourseStudent: (_, { name, studentID }, context) => {
+      // checking if the student_id and course_name are found
+      const found = Course_Student.find(
+        (c) => c.student_id === parseInt(studentID, 10) && c.name === name
+      );
+      // if found then delete the student and the course. If not, alert a message
+      if (found) {
+        Course_Student = Course_Student.filter(
+          (c) => c.student_id !== parseInt(studentID, 10) && c.name !== name
+        );
+        return found;
+      } else {
+        throw new Error(
+          "Student ID " +
+            studentID +
+            " and Course name " +
+            name +
+            " is Not Found"
+        );
       }
     }
   },
@@ -204,7 +266,13 @@ const resolvers = {
   // if It's courses if called under Faculty, retrieve the courses through id and place it to the courses variable of Faculty
   Faculty: {
     courses: (course) => {
-      return Course.filter((c) => c.faculty_id === course.id);
+      return Course_Professor.filter((c) => c.faculty_id === course.id);
+    }
+  },
+  // if It's courses if called under Student, retrieve the courses through id and place it to the courses variable of Student
+  Student: {
+    courses: (course) => {
+      return Course_Student.filter((c) => c.student_id === course.id);
     }
   }
 };
