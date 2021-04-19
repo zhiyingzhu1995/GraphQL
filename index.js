@@ -13,12 +13,6 @@ const typeDefs = gql`
     courses: [Course]
     #  to retrieve a list of assignments
     assignments: [Assignment]
-    # Set a grade for a student by specifying the student ID and grade
-    createAssignmentGrade(
-      assignmentID: ID!
-      studentID: ID!
-      grade: Float!
-    ): AssignmentGrade
   }
 
   # Role = an enumeration of valid user roles
@@ -35,10 +29,16 @@ const typeDefs = gql`
     createUser(name: String!, email: String!, role: Role!): User
     createCourse(name: String!, faculty_id: ID!): Course
     deleteCourse(courseID: ID!): Course
-    addCourseStudent(name: String!, studentID: ID!): Course
-    deleteCourseStudent(name: String!, studentID: ID!): Course
+    addCourseStudent(courseID: ID!, studentID: ID!): Course
+    deleteCourseStudent(courseID: ID!, studentID: ID!): Course
     createAssignment(courseID: ID!, name: String!): Assignment
     deleteAssignment(assignmentID: ID!): Assignment
+    # Set a grade for a student by specifying the student ID and grade
+    createAssignmentGrade(
+      assignmentID: ID!
+      studentID: ID!
+      grade: Float!
+    ): AssignmentGrade
   }
   # User type which includes the role as one of it's fields
   # Interfaces are useful when you want to return an object or set of objects, but those might be of several different types.
@@ -103,11 +103,11 @@ let Course_Professor = [
 ];
 
 // create a course_professoer database, you can use the course_id to join the id from course_professor database,
-// assuming each professor teaches 1 course
+// assuming each professor teaches 1 course, need to change name to course id
 let Course_Student = [
-  { id: 0, student_id: 1, name: "Course1" },
-  { id: 1, student_id: 1, name: "Course2" },
-  { id: 2, student_id: 1, name: "Course3" }
+  { id: 0, student_id: 1, course_id: 0 },
+  { id: 1, student_id: 1, course_id: 1 },
+  { id: 2, student_id: 1, course_id: 2 }
 ];
 
 // Create an assignment database
@@ -115,6 +115,13 @@ let Assignments = [
   { id: 0, course_id: 0, name: "Assignment1" },
   { id: 1, course_id: 0, name: "Assignment2" },
   { id: 2, course_id: 1, name: "Assignment1" }
+];
+
+// Create a assignmentgrade student database, use assignment_id, student_id as foreign id
+let AssignmentGrade = [
+  { id: 0, assignment_id: 0, student_id: 1, grade: 96.5 },
+  { id: 1, assignment_id: 1, student_id: 1, grade: 98 },
+  { id: 2, assignment_id: 2, student_id: 1, grade: 100 }
 ];
 
 // this.users is similar to self.users in python class variable
@@ -228,16 +235,17 @@ const resolvers = {
       }
     },
     // Add a student to a course. Do nothing if the student is already enrolled
-    addCourseStudent: (_, { name, studentID }, context) => {
+    addCourseStudent: (_, { courseID, studentID }, context) => {
+      let cID = parseInt(courseID, 10);
       let sID = parseInt(studentID, 10);
       const newStudentToCourse = {
         id: Course_Student.length + 1,
         student_id: sID,
-        name: name
+        course_id: cID
       };
       // add a condition to check if the student is already enrolled
       let Found = Course_Student.find(
-        (s) => s.student_id === sID && s.name === name
+        (s) => s.student_id === sID && s.course_id === cID
       );
 
       // if Not Found then add the student to the list, else, alert that the student has been added
@@ -250,24 +258,25 @@ const resolvers = {
     },
     // Remove a student from a course
     // not working somehow, will detele all course for the student
-    deleteCourseStudent: (_, { name, studentID }, context) => {
+    deleteCourseStudent: (_, { courseID, studentID }, context) => {
       let sID = parseInt(studentID, 10);
-      // checking if the student_id and course_name are found
-      const found = Course_Student.find(
-        (c) => c.student_id === sID && c.name === name
+      let cID = parseInt(courseID, 10);
+      // checking if the student_id and course_name are found. Get their index
+      const found_index = Course_Student.findIndex(
+        (c) => c.student_id === sID && c.course_id === cID
       );
+      // checking what the actual item by the found_index is
+      const found_item = Course_Student[found_index];
       // if found then delete the student and the course. If not, alert a message
-      if (found) {
-        Course_Student = Course_Student.filter(
-          (c) => !(c.student_id === sID && c.name === name)
-        );
-        return found;
+      if (found_index) {
+        Course_Student.splice(found_index, 1);
+        return found_item;
       } else {
         throw new Error(
           "Student ID " +
             studentID +
             " and Course name " +
-            name +
+            courseID +
             " is Not Found"
         );
       }
@@ -292,6 +301,21 @@ const resolvers = {
         Assignments = Assignments.filter((a) => a.id !== assId);
       }
       return found;
+    },
+    // Set a grade for a student by specifying the studentID and grade
+    createAssignmentGrade: (_, { assignmentID, studentID, grade }, context) => {
+      let aId = parseInt(assignmentID, 10);
+      let sId = parseInt(studentID, 10);
+      let grd = parseFloat(grade, 10);
+      const newAssignment = {
+        id: AssignmentGrade.length + 1,
+        assignment_id: aId,
+        student_id: sId,
+        grade: grd
+      };
+      // Push this to the database
+      AssignmentGrade.push(newAssignment);
+      return newAssignment;
     }
   },
   // the resolver needs help in determining how to distinguish between the three concrete types at runtime.
@@ -305,10 +329,16 @@ const resolvers = {
       return Course_Professor.filter((c) => c.faculty_id === course.id);
     }
   },
-  // if It's courses if called under Student, retrieve the courses through id and place it to the courses variable of Student
   Student: {
+    // if the courses is called under Student, retrieve the courses through id and place it to the courses variable of Student
     courses: (course) => {
       return Course_Student.filter((c) => c.student_id === course.id);
+    }
+  },
+  // if assignment query is called, populate the grades using the assignmentgrae grades
+  Assignment: {
+    grades: (grade) => {
+      return AssignmentGrade.filter((g) => g.assignment_id === grade.id);
     }
   }
 };
