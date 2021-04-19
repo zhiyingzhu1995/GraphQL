@@ -306,12 +306,11 @@ const resolvers = {
     createAssignmentGrade: (_, { assignmentID, studentID, grade }, context) => {
       let aId = parseInt(assignmentID, 10);
       let sId = parseInt(studentID, 10);
-      let grd = parseFloat(grade, 10);
       const newAssignment = {
         id: AssignmentGrade.length + 1,
         assignment_id: aId,
         student_id: sId,
-        grade: grd
+        grade: grade
       };
       // Push this to the database
       AssignmentGrade.push(newAssignment);
